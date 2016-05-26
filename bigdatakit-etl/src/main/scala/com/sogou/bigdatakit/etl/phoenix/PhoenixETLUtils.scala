@@ -9,7 +9,6 @@ import org.apache.spark.sql.{DataFrame, SaveMode}
   */
 object PhoenixETLUtils {
   val conf = HBaseConfiguration.create()
-  conf.set("hbase.client.keyvalue.maxsize", "0")
   val zkUrl = conf.get("hbase.zookeeper.quorum")
 
   def toPhoenix(df: DataFrame, table: String, logdate: String,
@@ -20,7 +19,7 @@ object PhoenixETLUtils {
       coalesce(parallelism).write.
       format("org.apache.phoenix.spark").
       mode(SaveMode.Overwrite).
-      options(Map("table" -> table, "zkUrl" -> zkUrl)).
+      options(Map("table" -> table, "zkUrl" -> zkUrl, "hbase.client.keyvalue.maxsize" -> "0")).
       save()
   }
 }
