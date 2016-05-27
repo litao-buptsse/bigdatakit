@@ -19,7 +19,7 @@ object PhoenixETLUtils {
       coalesce(parallelism).write.
       format("org.apache.phoenix.spark").
       mode(SaveMode.Overwrite).
-      options(Map("table" -> table, "zkUrl" -> zkUrl)).
+      options(Map("table" -> table, "zkUrl" -> zkUrl, "hbase.client.keyvalue.maxsize" -> "0")).
       save()
   }
 }

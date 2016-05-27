@@ -2,6 +2,7 @@ package com.sogou.bigdatakit.etl.hbase
 
 import com.sogou.bigdatakit.common.util.AvroUtils
 import org.apache.avro.specific.SpecificRecordBase
+import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.spark.rdd.RDD
 import unicredit.spark.hbase._
 
@@ -9,7 +10,9 @@ import unicredit.spark.hbase._
   * Created by Tao Li on 2016/3/30.
   */
 object HBaseETLUtils {
-  implicit val hbaseConfig = HBaseConfig()
+  val conf = HBaseConfiguration.create()
+  conf.set("hbase.client.keyvalue.maxsize", "0")
+  implicit val hbaseConfig = HBaseConfig(conf)
 
   class AvroWrites[T <: SpecificRecordBase] extends Writes[T] {
     override def write(data: T): Array[Byte] = AvroUtils.avroObjectToBytes(data)
