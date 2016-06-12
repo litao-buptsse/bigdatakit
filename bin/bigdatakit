@@ -330,6 +330,10 @@ download_packages() {
   rm -f .packages_list
 }
 
+rsync_hive_auxlib() {
+  rsync -rvt --delete rsync.datadir.sogou::datacat/auxlib $HIVE_HOME >/dev/null 2>&1
+}
+
 dir=`dirname $0`
 dir=`cd $dir/..; pwd`
 . $dir/conf/bigdatakit-env.sh
@@ -343,6 +347,7 @@ PACKAGES_CLASSPATH=""
 FULL_PARAMS=""
 parse_params "$@"
 download_packages $PACKAGES
+rsync_hive_auxlib
 
 case $COMMAND in
   help)
