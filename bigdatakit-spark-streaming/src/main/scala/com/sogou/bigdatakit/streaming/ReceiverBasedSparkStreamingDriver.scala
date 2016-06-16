@@ -2,7 +2,7 @@ package com.sogou.bigdatakit.streaming
 
 import com.sogou.bigdatakit.common.util.CommonUtils._
 import com.sogou.bigdatakit.kafka.serializer.AvroFlumeEventBodyDecoder
-import com.sogou.bigdatakit.streaming.processor.LineProcessor
+import com.sogou.bigdatakit.streaming.processor.{DStreamProcessor, LineProcessor, RDDProcessor}
 import kafka.serializer.StringDecoder
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
@@ -11,8 +11,8 @@ import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.slf4j.LoggerFactory
 
 /**
- * Created by Tao Li on 2015/8/19.
- */
+  * Created by Tao Li on 2015/8/19.
+  */
 class ReceiverBasedSparkStreamingDriver(settings: SparkStreamingSettings)
   extends SparkStreamingDriver with Serializable {
   private val LOG = LoggerFactory.getLogger(getClass)
@@ -25,8 +25,8 @@ class ReceiverBasedSparkStreamingDriver(settings: SparkStreamingSettings)
   private val topicMap = settings.KAFKA_TOPICS.split(",").
     map((_, settings.KAFKA_CONSUMER_THREAD_NUM)).toMap
 
-  private val processor = Class.forName(settings.PROCESSOR_CLASS).
-    newInstance.asInstanceOf[LineProcessor]
+  private val processor = Class.forName(settings.PROCESSOR_CLASS)
+    .newInstance.asInstanceOf[DStreamProcessor]
 
   @transient private var sscOpt: Option[StreamingContext] = None
 
@@ -36,19 +36,13 @@ class ReceiverBasedSparkStreamingDriver(settings: SparkStreamingSettings)
     conf.setAppName(settings.SPARK_APP_NAME).setMaster(settings.SPARK_MASTER_URL).
       set("spark.scheduler.mode", "FAIR")
     val sc = new SparkContext(conf)
-    for((k, v) <- settings.hadoopConfigMap) sc.hadoopConfiguration.set(k, v)
+    for ((k, v) <- settings.hadoopConfigMap) sc.hadoopConfiguration.set(k, v)
     sscOpt = Some(new StreamingContext(sc, batchDuration))
 
     val inputStream = KafkaUtils.createStream[
       String, String, StringDecoder, AvroFlumeEventBodyDecoder](
-        sscOpt.get, kafkaParams, topicMap, StorageLevel.MEMORY_AND_DISK_SER)
-    inputStream.map(_._2).foreachRDD { rdd =>
-      rdd.foreachPartition { iter =>
-        processor.init()
-        iter.foreach(processor.process(_))
-        processor.close()
-      }
-    }
+      sscOpt.get, kafkaParams, topicMap, StorageLevel.MEMORY_AND_DISK_SER)
+    processor.process(inputStream.map(_._2))
 
     sscOpt.get.start
     sscOpt.get.awaitTermination

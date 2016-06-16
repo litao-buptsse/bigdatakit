@@ -2,7 +2,7 @@ package com.sogou.bigdatakit.streaming
 
 import com.sogou.bigdatakit.common.util.CommonUtils._
 import com.sogou.bigdatakit.kafka.serializer.AvroFlumeEventBodyDecoder
-import com.sogou.bigdatakit.streaming.processor.LineProcessor
+import com.sogou.bigdatakit.streaming.processor.{DStreamProcessor, LineProcessor, RDDProcessor}
 import kafka.common.TopicAndPartition
 import kafka.message.MessageAndMetadata
 import kafka.serializer.StringDecoder
@@ -14,8 +14,8 @@ import org.apache.spark.streaming.{Seconds, StreamingContext}
 import org.slf4j.LoggerFactory
 
 /**
- * Created by Tao Li on 2015/8/19.
- */
+  * Created by Tao Li on 2015/8/19.
+  */
 class DirectBasedSparkStreamingDriver(settings: SparkStreamingSettings)
   extends SparkStreamingDriver with Serializable {
   private val LOG = LoggerFactory.getLogger(getClass)
@@ -28,7 +28,7 @@ class DirectBasedSparkStreamingDriver(settings: SparkStreamingSettings)
   ) ++ settings.kafkaConfigMap
   private val topicSeq = settings.KAFKA_TOPICS.split(",").toSeq
   private val processor = Class.forName(settings.PROCESSOR_CLASS).
-    newInstance.asInstanceOf[LineProcessor]
+    newInstance.asInstanceOf[RDDProcessor]
 
   @transient private var zkClientOpt: Option[ZkClient] = None
   @transient private var sscOpt: Option[StreamingContext] = None
@@ -81,15 +81,15 @@ class DirectBasedSparkStreamingDriver(settings: SparkStreamingSettings)
     conf.setAppName(settings.SPARK_APP_NAME).setMaster(settings.SPARK_MASTER_URL).
       set("spark.scheduler.mode", "FAIR")
     val sc = new SparkContext(conf)
-    for((k, v) <- settings.hadoopConfigMap) sc.hadoopConfiguration.set(k, v)
+    for ((k, v) <- settings.hadoopConfigMap) sc.hadoopConfiguration.set(k, v)
     sscOpt = Some(new StreamingContext(sc, batchDuration))
 
     // create the inputStream from consumer offsets with direct api
     val inputStream = KafkaUtils.createDirectStream[
       String, String, StringDecoder, AvroFlumeEventBodyDecoder, String](
-        sscOpt.get, kafkaParams, fromOffsets,
-        (m: MessageAndMetadata[String, String]) => m.message()
-      )
+      sscOpt.get, kafkaParams, fromOffsets,
+      (m: MessageAndMetadata[String, String]) => m.message()
+    )
 
     var offsetRanges = Array[OffsetRange]()
     var unCommitBatchNum = 0
@@ -98,11 +98,7 @@ class DirectBasedSparkStreamingDriver(settings: SparkStreamingSettings)
       offsetRanges = rdd.asInstanceOf[HasOffsetRanges].offsetRanges
       rdd
     }.foreachRDD { rdd =>
-      rdd.foreachPartition { iter =>
-        processor.init()
-        iter.foreach(processor.process(_))
-        processor.close()
-      }
+      processor.process(rdd)
       unCommitBatchNum += 1
 
       if (unCommitBatchNum >= settings.KAFKA_OFFSETS_COMMIT_BATCH_INTERVAL) {
